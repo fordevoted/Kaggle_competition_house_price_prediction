@@ -3,17 +3,15 @@
 import numpy as np
 import pandas as pd
 from scipy.special import boxcox1p
-from scipy.stats import norm, skew
+from scipy.stats import skew
 import matplotlib.pyplot as plt
 # model
 from sklearn.preprocessing import RobustScaler
-from sklearn.model_selection import KFold, cross_val_score
 import keras.optimizers as optimizers
 from keras.layers import Dense, Conv1D, MaxPooling1D, Dropout, Flatten, regularizers
-from keras.callbacks import  EarlyStopping
+from keras.callbacks import EarlyStopping
 import keras
-# RMSE
-n_folds = 5
+import lightgbm as lgb
 
 
 def rmse(y_true, y_pred):
@@ -129,59 +127,54 @@ for feat in skewed_features:
 
 # one-hot pot encoding
 all_data = pd.get_dummies(all_data)
+
 # depart training data dn testing data
 train = all_data[:ntrain]
 test = all_data[ntrain:]
 
-# model
+# feature scalar
 scaler = RobustScaler()
 train = scaler.fit_transform(train)
 test = scaler.transform(test)
 
 # expend dim to fit conv1D
-#train = np.expand_dims(train, axis=2)
-#est = np.expand_dims(test, axis=2)
+# train = np.expand_dims(train, axis=2)
+# est = np.expand_dims(test, axis=2)
 
-print(train.shape)
-'''
-model_lgb = lgb.LGBMRegressor(objective='regression', num_leaves=5,
-                              learning_rate=0.05, n_estimators=1000,
-                              max_bin=55, bagging_fraction=0.8,
-                              bagging_freq=5, feature_fraction=0.2,
-                              feature_fraction_seed=9, bagging_seed=9,
-                              min_data_in_leaf=6, min_sum_hessian_in_leaf=11)
-model_lgb.fit(train, y_train)
-lgb_train_pred = model_lgb.predict(train)
-# score = rmsle_cv(model_lgb)
-# print("LGBM score: {:.4f} ({:.4f})\n".format(score.mean(), score.std()))
-'''
-epochs = 100
-batch_size = 16
-validation_spilt = 0.15
+# print(type(train))
+# print(train)
 
+# model
+epochs = 1000
+batch_size = 32
+validation_spilt = 0.2
+# optimizer = optimizers.SGD(lr=0.001)
+optimizer = optimizers.Adam(lr=1.0e-4, beta_1=0.999, beta_2=0.999, amsgrad=False)
+#optimizer = optimizers.Nadam(lr=0.001, beta_1=0.999, beta_2=0.999, epsilon=None, schedule_decay=0.001)
 model = keras.Sequential()
 # model.add(Conv1D(filters=256, kernel_size=3, activation='relu', input_shape=(254, 1)))
-# model.add(MaxPooling1D(pool_size=2))
+# model.add(MaxPooling1D(pool_size=2))d
 # model.add(Flatten())
-model.add(Dense(256, activation='selu', input_shape=(254, )))
-model.add(Dense(128, activation='selu'))
-model.add(Dense(32, activation='selu'))
-model.add(Dense(16, activation='selu'))
-model.add(Dense(8, activation='selu'))
-model.add(Dense(4, activation='selu'))
-model.add(Dropout(0.001))
-model.add(Dense(1, activation='relu', kernel_regularizer=regularizers.l2(0.0001)))
-# compile
-#optimizer = optimizers.SGD(lr=0.001)
-optimizer = optimizers.Adam(lr=0.001, beta_1=0.99, beta_2=0.99, amsgrad=False)
+model.add(Dense(128, activation='elu', input_shape=(254,)))
+model.add(Dense(32, activation='elu', kernel_regularizer=regularizers.l2(1.0e-5)))
+model.add(Dense(16, activation='elu', kernel_regularizer=regularizers.l2(1.0e-5)))
+model.add(Dense(8, activation='elu', kernel_regularizer=regularizers.l2(1.0e-5)))
+model.add(Dense(4, activation='elu', kernel_regularizer=regularizers.l2(1.0e-5)))
+model.add(Dropout(5.0e-5))
+model.add(Dense(1, activation='relu', activity_regularizer=regularizers.l2(1.0e-5)))
+#, kernel_regularizer=regularizers.l2(0.01))
 
-# optimizer = optimizers.Nadam(lr=0.001, beta_1=0.99, beta_2=0.999, epsilon=None, schedule_decay=0.0004)
-model.compile(loss='mean_squared_error',
-              optimizer=optimizer,
-              metrics=[rmse])
+model.compile(loss='mean_squared_error', optimizer=optimizer, metrics=[rmse])
 
-early_stopping = EarlyStopping(monitor='val_rmse', patience=50, verbose=2)  # callbacks=[early_stopping]
-history = model.fit(train, y_train, epochs=epochs, batch_size=batch_size, validation_split=validation_spilt, shuffle=True, verbose=1, callbacks=[early_stopping])
+early_stopping = EarlyStopping(monitor='val_rmse', patience=60, verbose=2)  # callbacks=[early_stopping]
+
+history = model.fit(train, y_train, epochs=epochs, batch_size=batch_size, validation_split=validation_spilt,
+                    shuffle=True, verbose=2, callbacks=[early_stopping])
+
+
+
+
+# plot learning curve
 plt.plot(history.history['rmse'])
 plt.plot(history.history['val_rmse'])
 plt.title('Model rmse')
@@ -190,13 +183,63 @@ plt.xlabel('Epoch')
 plt.legend(['Train', 'Test'], loc='upper left')
 plt.show()
 
-pred = np.expm1(model.predict(test))
+# predict
 # lgb_pred = np.expm1(model_lgb.predict(test))
 
-
-
+pred = np.expm1(model.predict(test))
 # save csv
 sub = pd.DataFrame()
 sub['Id'] = test_ID
-sub['SalePrice'] = pred #lgb_pred
+sub['SalePrice'] = pred  # lgb_pred
 sub.to_csv('submission.csv', index=False)
+
+
+'''
+model Ensemble: compare to Squential model, not better 
+input1 = keras.layers.Input(shape=(254, ))
+hidden11 = Dense(128, activation='selu')(input1)
+hidden12 = Dense(32, activation='selu')(hidden11)
+hidden13 = Dense(8, activation='selu')(hidden12)
+hidden14 = Dense(1, activation='relu', kernel_regularizer=regularizers.l2(0.001))(hidden13)
+
+input2 = keras.layers.Input(shape=(254, ))
+hidden21 = Dense(64, activation='selu')(input2)
+hidden22 = Dense(8, activation='selu')(hidden21)
+hidden23 = Dense(4, activation='selu')(hidden22)
+hidden24 = Dense(1, activation='relu', kernel_regularizer=regularizers.l2(0.001))(hidden23)
+
+input3 = keras.layers.Input(shape=(254, ))
+hidden31 = Dense(32, activation='selu')(input3)
+hidden32 = Dense(8, activation='selu')(hidden31)
+hidden33 = Dense(4, activation='selu')(hidden32)
+hidden34 = Dense(1, activation='relu', kernel_regularizer=regularizers.l2(0.001))(hidden33)
+
+concat = keras.layers.Concatenate()([hidden14, hidden24, hidden34])
+output = Dense(1, activation='relu', activity_regularizer=regularizers.l2(0.001))(concat)
+modelEnsemble = keras.Model(inputs=[input1, input2, input3], output=output)
+modelEnsemble.compile(loss='mean_squared_error', optimizer=optimizer, metrics=[rmse])
+history = modelEnsemble.fit([train, train, train], y_train, epochs=epochs, batch_size=batch_size, validation_split=validation_spilt,
+                   shuffle=True, verbose=2, callbacks=[early_stopping])
+pred = np.expm1(modelEnsemble.predict([test, test, test]))
+'''
+
+'''
+model Sequential: best score on kaggle is about 0.013144, val_rmse is 0.0860
+               
+'''
+
+'''
+LightGBM
+model_lgb = lgb.LGBMRegressor(objective='regression', num_leaves=5,
+                              learning_rate=0.05, n_estimators=1000,
+                              max_bin=55, bagging_fraction=0.8,
+                              bagging_freq=5, feature_fraction=0.2,
+                              feature_fraction_seed=9, bagging_seed=9,
+                              min_data_in_leaf=6, min_sum_hessian_in_leaf=11)
+model_lgb.fit(train, y_train)
+lgb_train_pred = model_lgb.predict(train)
+score = rmse(y_train, model_lgb.predict(train))
+print("LGBM rmsw: ", score)
+# score = rmsle_cv(model_lgb)
+# print("LGBM score: {:.4f} ({:.4f})\n".format(score.mean(), score.std()))
+'''
