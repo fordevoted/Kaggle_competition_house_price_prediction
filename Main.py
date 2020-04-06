@@ -149,20 +149,27 @@ epochs = 1000
 batch_size = 32
 validation_spilt = 0.2
 # optimizer = optimizers.SGD(lr=0.001)
-optimizer = optimizers.Adam(lr=1.0e-4, beta_1=0.999, beta_2=0.999, amsgrad=False)
+optimizer = optimizers.Adam(lr=5.0e-5, beta_1=0.999, beta_2=0.999, amsgrad=False)
 #optimizer = optimizers.Nadam(lr=0.001, beta_1=0.999, beta_2=0.999, epsilon=None, schedule_decay=0.001)
 model = keras.Sequential()
 # model.add(Conv1D(filters=256, kernel_size=3, activation='relu', input_shape=(254, 1)))
 # model.add(MaxPooling1D(pool_size=2))d
 # model.add(Flatten())
 model.add(Dense(128, activation='elu', input_shape=(254,)))
-model.add(Dense(32, activation='elu', kernel_regularizer=regularizers.l2(1.0e-5)))
-model.add(Dense(16, activation='elu', kernel_regularizer=regularizers.l2(1.0e-5)))
-model.add(Dense(8, activation='elu', kernel_regularizer=regularizers.l2(1.0e-5)))
-model.add(Dense(8, activation='elu', kernel_regularizer=regularizers.l2(1.0e-5)))
-model.add(Dense(4, activation='elu', kernel_regularizer=regularizers.l2(1.0e-5)))
+model.add(Dense(64, activation='elu', kernel_regularizer=regularizers.l2(5.0e-5),
+                bias_regularizer=regularizers.l2(5.0e-5)))
+model.add(Dense(16, activation='elu', kernel_regularizer=regularizers.l2(5.0e-5),
+                bias_regularizer=regularizers.l2(5.0e-5)))
+model.add(Dense(32, activation='elu', kernel_regularizer=regularizers.l2(5.0e-5),
+                bias_regularizer=regularizers.l2(5.0e-5)))
+model.add(Dense(8, activation='elu', kernel_regularizer=regularizers.l2(5.0e-5),
+                bias_regularizer=regularizers.l2(5.0e-5)))
+model.add(Dense(8, activation='elu', kernel_regularizer=regularizers.l2(5.0e-5),
+                bias_regularizer=regularizers.l2(5.0e-5)))
+model.add(Dense(4, activation='elu', kernel_regularizer=regularizers.l2(5.0e-5),
+                bias_regularizer=regularizers.l2(5.0e-5)))
 #model.add(Dropout(5.0e-5))
-model.add(Dense(1, activation='relu', activity_regularizer=regularizers.l2(1.0e-5)))
+model.add(Dense(1, activation='relu', activity_regularizer=regularizers.l2(5.0e-5)))
 # , kernel_regularizer=regularizers.l2(0.01))
 model.compile(loss='mean_squared_error', optimizer=optimizer, metrics=[rmse])
 
