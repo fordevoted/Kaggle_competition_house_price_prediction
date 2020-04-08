@@ -11,6 +11,7 @@ rank.561 / 4485 (12.5%) in 2020.3
 pull to local, and install package used, then run the code.
 
 # License
+MIT License
 YuWei, Chen<br>
 NCU CSIE undergraduate
 
